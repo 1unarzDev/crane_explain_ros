@@ -19,7 +19,13 @@ from nav2_msgs.action import NavigateToPose
 from nav2_msgs.msg import BehaviorTreeLog
 from rclpy.node import Node
 from rclpy.executors import ExternalShutdownException
-from rclpy.qos import qos_profile_system_default
+from rclpy.qos import (
+    DurabilityPolicy,
+    HistoryPolicy,
+    QoSProfile,
+    ReliabilityPolicy,
+    qos_profile_system_default,
+)
 from std_msgs.msg import String
 
 from .writer import ArtifactWriter
@@ -47,7 +53,14 @@ class EvidenceCapture(Node):
             GoalStatusArray, base + "/_action/status", self.on_status,
             qos_profile_system_default,
         )
-        self.create_subscription(String, args.harness_topic, self.on_harness, 10)
+        harness_qos = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=20,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self.create_subscription(
+            String, args.harness_topic, self.on_harness, harness_qos)
         self.writer.write({"type": "capture_started", "wall_time_ns": time.time_ns()})
 
     def on_bt(self, message: BehaviorTreeLog) -> None:

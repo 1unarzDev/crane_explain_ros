@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from crane_explain_ros.writer import ArtifactWriter
 
@@ -27,3 +28,11 @@ def test_writer_rejects_nonpositive_sync_interval(tmp_path):
         assert "must be positive" in str(exc)
     else:
         raise AssertionError("expected invalid sync interval to be rejected")
+
+
+def test_capture_uses_transient_local_harness_qos():
+    capture = (Path(__file__).parents[1] / "crane_explain_ros" / "capture.py").read_text()
+    harness = capture.split("harness_qos = QoSProfile(", 1)[1].split(")", 1)[0]
+    assert "ReliabilityPolicy.RELIABLE" in harness
+    assert "DurabilityPolicy.TRANSIENT_LOCAL" in harness
+    assert "depth=20" in harness
