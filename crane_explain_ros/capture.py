@@ -18,6 +18,7 @@ from action_msgs.msg import GoalStatusArray
 from nav2_msgs.action import NavigateToPose
 from nav2_msgs.msg import BehaviorTreeLog
 from rclpy.node import Node
+from rclpy.executors import ExternalShutdownException
 from rclpy.qos import qos_profile_system_default
 from std_msgs.msg import String
 
@@ -72,7 +73,7 @@ class EvidenceCapture(Node):
 
     def on_status(self, message: GoalStatusArray) -> None:
         self.writer.write({
-            "type": "action_status", "header_stamp": stamp(message.header.stamp),
+            "type": "action_status", "received_wall_time_ns": time.time_ns(),
             "statuses": [{"goal_id": bytes(item.goal_info.goal_id.uuid).hex(),
                           "accepted_stamp": stamp(item.goal_info.stamp),
                           "status": int(item.status)} for item in message.status_list],
@@ -116,11 +117,13 @@ def main(argv: list[str] | None = None) -> None:
     node = EvidenceCapture(args)
     try:
         rclpy.spin(node)
+    except ExternalShutdownException:
+        pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":
     main()
-
