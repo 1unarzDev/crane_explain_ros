@@ -117,7 +117,7 @@ def main(argv: list[str] | None = None) -> None:
     node = EvidenceCapture(args)
     try:
         rclpy.spin(node)
-    except ExternalShutdownException:
+    except (ExternalShutdownException, KeyboardInterrupt):
         pass
     finally:
         node.destroy_node()

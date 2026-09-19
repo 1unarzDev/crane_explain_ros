@@ -19,5 +19,5 @@ ros2 run crane_explain_ros capture --ros-args -- \
   --bt-xml /path/to/exact_tree.xml
 ```
 
-Current status: **IMPLEMENTED**; writer unit and isolated Jazzy-container `colcon build` **TESTED**;
-live Nav2 capture **NOT_RUN**. No C++ BT hook is used.
+Current status: **IMPLEMENTED AND TESTED** with writer unit tests, an isolated Jazzy-container
+build, and live CRANE/Nav2 captures. No C++ BT hook is used.
