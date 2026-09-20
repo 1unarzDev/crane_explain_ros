@@ -17,8 +17,8 @@ import rclpy
 from action_msgs.msg import GoalStatusArray
 from nav2_msgs.action import NavigateToPose
 from nav2_msgs.msg import BehaviorTreeLog
-from rclpy.node import Node
 from rclpy.executors import ExternalShutdownException
+from rclpy.node import Node
 from rclpy.qos import (
     DurabilityPolicy,
     HistoryPolicy,
@@ -42,15 +42,25 @@ def duration(value: Any) -> float:
 class EvidenceCapture(Node):
     def __init__(self, args: argparse.Namespace):
         super().__init__("crane_explanation_evidence_capture")
-        self.writer = ArtifactWriter(args.output, args.episode_id, args.run_id, args.bt_xml)
+        self.writer = ArtifactWriter(
+            args.output,
+            args.episode_id,
+            args.run_id,
+            args.bt_xml,
+            runtime_manifest=args.runtime_manifest,
+        )
         base = args.action.rstrip("/")
         self.create_subscription(BehaviorTreeLog, args.bt_topic, self.on_bt, 10)
         self.create_subscription(
-            NavigateToPose.Impl.FeedbackMessage, base + "/_action/feedback",
-            self.on_feedback, qos_profile_system_default,
+            NavigateToPose.Impl.FeedbackMessage,
+            base + "/_action/feedback",
+            self.on_feedback,
+            qos_profile_system_default,
         )
         self.create_subscription(
-            GoalStatusArray, base + "/_action/status", self.on_status,
+            GoalStatusArray,
+            base + "/_action/status",
+            self.on_status,
             qos_profile_system_default,
         )
         harness_qos = QoSProfile(
@@ -60,37 +70,56 @@ class EvidenceCapture(Node):
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
         )
         self.create_subscription(
-            String, args.harness_topic, self.on_harness, harness_qos)
+            String, args.harness_topic, self.on_harness, harness_qos
+        )
         self.writer.write({"type": "capture_started", "wall_time_ns": time.time_ns()})
 
     def on_bt(self, message: BehaviorTreeLog) -> None:
         for event in message.event_log:
-            self.writer.write({
-                "type": "bt_transition", "message_stamp": stamp(message.timestamp),
-                "event_stamp": stamp(event.timestamp), "node_name": event.node_name,
-                "node_uid": event.uid, "previous_status": event.previous_status,
-                "current_status": event.current_status,
-            })
+            self.writer.write(
+                {
+                    "type": "bt_transition",
+                    "message_stamp": stamp(message.timestamp),
+                    "event_stamp": stamp(event.timestamp),
+                    "node_name": event.node_name,
+                    "node_uid": event.uid,
+                    "previous_status": event.previous_status,
+                    "current_status": event.current_status,
+                }
+            )
 
     def on_feedback(self, message: Any) -> None:
         feedback = message.feedback
-        self.writer.write({
-            "type": "navigate_to_pose_feedback", "goal_id": bytes(message.goal_id.uuid).hex(),
-            "navigation_time_s": duration(feedback.navigation_time),
-            "estimated_time_remaining_s": duration(feedback.estimated_time_remaining),
-            "number_of_recoveries": int(feedback.number_of_recoveries),
-            "distance_remaining": float(feedback.distance_remaining),
-            "current_pose_stamp": stamp(feedback.current_pose.header.stamp),
-            "current_pose_frame": feedback.current_pose.header.frame_id,
-        })
+        self.writer.write(
+            {
+                "type": "navigate_to_pose_feedback",
+                "goal_id": bytes(message.goal_id.uuid).hex(),
+                "navigation_time_s": duration(feedback.navigation_time),
+                "estimated_time_remaining_s": duration(
+                    feedback.estimated_time_remaining
+                ),
+                "number_of_recoveries": int(feedback.number_of_recoveries),
+                "distance_remaining": float(feedback.distance_remaining),
+                "current_pose_stamp": stamp(feedback.current_pose.header.stamp),
+                "current_pose_frame": feedback.current_pose.header.frame_id,
+            }
+        )
 
     def on_status(self, message: GoalStatusArray) -> None:
-        self.writer.write({
-            "type": "action_status", "received_wall_time_ns": time.time_ns(),
-            "statuses": [{"goal_id": bytes(item.goal_info.goal_id.uuid).hex(),
-                          "accepted_stamp": stamp(item.goal_info.stamp),
-                          "status": int(item.status)} for item in message.status_list],
-        })
+        self.writer.write(
+            {
+                "type": "action_status",
+                "received_wall_time_ns": time.time_ns(),
+                "statuses": [
+                    {
+                        "goal_id": bytes(item.goal_info.goal_id.uuid).hex(),
+                        "accepted_stamp": stamp(item.goal_info.stamp),
+                        "status": int(item.status),
+                    }
+                    for item in message.status_list
+                ],
+            }
+        )
 
     def on_harness(self, message: String) -> None:
         try:
@@ -99,10 +128,16 @@ class EvidenceCapture(Node):
             self.writer.write({"type": "invalid_harness_event", "error": str(exc)})
             return
         if not isinstance(event, dict) or event.get("type") not in {
-            "navigate_to_pose_goal", "navigate_to_pose_result", "client_cancel",
-            "client_deadline", "crane_identity", "observation_identity",
+            "navigate_to_pose_goal",
+            "navigate_to_pose_result",
+            "client_cancel",
+            "client_deadline",
+            "crane_identity",
+            "observation_identity",
         }:
-            self.writer.write({"type": "invalid_harness_event", "error": "unsupported type"})
+            self.writer.write(
+                {"type": "invalid_harness_event", "error": "unsupported type"}
+            )
             return
         self.writer.write({"type": "harness_event", "event": event})
 
@@ -114,10 +149,16 @@ class EvidenceCapture(Node):
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output", required=True, help="new, non-existing artifact directory")
+    parser.add_argument(
+        "--output", required=True, help="new, non-existing artifact directory"
+    )
     parser.add_argument("--episode-id", required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--bt-xml")
+    parser.add_argument(
+        "--runtime-manifest",
+        help="immutable JSON runtime/source manifest copied and hashed into the capture",
+    )
     parser.add_argument("--bt-topic", default="/behavior_tree_log")
     parser.add_argument("--action", default="/navigate_to_pose")
     parser.add_argument("--harness-topic", default="/crane/explanation_event")

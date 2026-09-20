@@ -11,8 +11,13 @@ from typing import Any
 
 class ArtifactWriter:
     def __init__(
-        self, root: str | Path, episode_id: str, run_id: str, bt_xml: str | None,
+        self,
+        root: str | Path,
+        episode_id: str,
+        run_id: str,
+        bt_xml: str | None,
         sync_interval_records: int = 100,
+        runtime_manifest: str | Path | None = None,
     ):
         if sync_interval_records < 1:
             raise ValueError("sync_interval_records must be positive")
@@ -43,12 +48,20 @@ class ArtifactWriter:
             (self.root / "behavior_tree.xml").write_bytes(payload)
             manifest["bt_xml_source"] = str(source.resolve())
             manifest["bt_xml_sha256"] = hashlib.sha256(payload).hexdigest()
+        if runtime_manifest:
+            source = Path(runtime_manifest)
+            payload = source.read_bytes()
+            (self.root / "runtime_manifest.json").write_bytes(payload)
+            manifest["runtime_manifest_source"] = str(source.resolve())
+            manifest["runtime_manifest_sha256"] = hashlib.sha256(payload).hexdigest()
         with (self.root / "manifest.json").open("x", encoding="utf-8") as output:
             json.dump(manifest, output, indent=2, sort_keys=True)
             output.write("\n")
 
     def write(self, record: dict[str, Any]) -> None:
-        self.stream.write(json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n")
+        self.stream.write(
+            json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n"
+        )
         self.stream.flush()
         self.records_since_sync += 1
         if self.records_since_sync >= self.sync_interval_records:

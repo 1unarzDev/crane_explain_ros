@@ -16,8 +16,14 @@ colcon build --packages-select crane_explain_ros
 . install/setup.bash
 ros2 run crane_explain_ros capture --ros-args -- \
   --output /results/opaque-e1 --episode-id opaque-e1 --run-id run-1 \
-  --bt-xml /path/to/exact_tree.xml
+  --bt-xml /path/to/exact_tree.xml \
+  --runtime-manifest /path/to/immutable-runtime-manifest.json
 ```
+
+The optional runtime manifest is copied byte-for-byte into the capture and SHA-256 recorded. For
+final episodes it should contain the container image digest, installed ROS/Nav2 package versions,
+parameter/BT hashes, launch argv/environment overrides, loaded plugins, and QoS settings. A checkout
+commit must not be represented as proven binary source unless that mapping was actually verified.
 
 Current status: **IMPLEMENTED AND TESTED** with writer unit tests, an isolated Jazzy-container
 build, and live CRANE/Nav2 captures. No C++ BT hook is used.
