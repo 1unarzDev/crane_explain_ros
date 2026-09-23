@@ -27,3 +27,7 @@ commit must not be represented as proven binary source unless that mapping was a
 
 Current status: **IMPLEMENTED AND TESTED** with writer unit tests, an isolated Jazzy-container
 build, and live CRANE/Nav2 captures. No C++ BT hook is used.
+The observer also retains time-stamped receipt records for the default `/nav2/cmd_vel` command
+and `/crane/odom` odometry topics. These records support bounded command-to-motion checks. A
+delivered Nav2 command does not prove downstream actuator acceptance, and delivered odometry does
+not prove Nav2 consumption; both limitations are embedded in every record.

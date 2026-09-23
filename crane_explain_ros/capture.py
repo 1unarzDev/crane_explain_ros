@@ -15,8 +15,10 @@ from typing import Any
 
 import rclpy
 from action_msgs.msg import GoalStatusArray
+from geometry_msgs.msg import Twist
 from nav2_msgs.action import NavigateToPose
 from nav2_msgs.msg import BehaviorTreeLog
+from nav_msgs.msg import Odometry
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import (
@@ -62,6 +64,12 @@ class EvidenceCapture(Node):
             base + "/_action/status",
             self.on_status,
             qos_profile_system_default,
+        )
+        self.create_subscription(
+            Twist, args.command_topic, self.on_command, qos_profile_system_default
+        )
+        self.create_subscription(
+            Odometry, args.odom_topic, self.on_odometry, qos_profile_system_default
         )
         harness_qos = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
@@ -121,6 +129,60 @@ class EvidenceCapture(Node):
             }
         )
 
+    def on_command(self, message: Twist) -> None:
+        self.writer.write(
+            {
+                "type": "nav2_command",
+                "received_wall_time_ns": time.time_ns(),
+                "linear_mps": {
+                    "x": float(message.linear.x),
+                    "y": float(message.linear.y),
+                    "z": float(message.linear.z),
+                },
+                "angular_radps": {
+                    "x": float(message.angular.x),
+                    "y": float(message.angular.y),
+                    "z": float(message.angular.z),
+                },
+                "provenance": "delivered-nav2-command-not-proof-of-actuator-acceptance",
+            }
+        )
+
+    def on_odometry(self, message: Odometry) -> None:
+        pose = message.pose.pose
+        twist = message.twist.twist
+        self.writer.write(
+            {
+                "type": "measured_odometry",
+                "received_wall_time_ns": time.time_ns(),
+                "stamp": stamp(message.header.stamp),
+                "frame_id": message.header.frame_id,
+                "child_frame_id": message.child_frame_id,
+                "position_m": {
+                    "x": float(pose.position.x),
+                    "y": float(pose.position.y),
+                    "z": float(pose.position.z),
+                },
+                "orientation_xyzw": {
+                    "x": float(pose.orientation.x),
+                    "y": float(pose.orientation.y),
+                    "z": float(pose.orientation.z),
+                    "w": float(pose.orientation.w),
+                },
+                "linear_velocity_mps": {
+                    "x": float(twist.linear.x),
+                    "y": float(twist.linear.y),
+                    "z": float(twist.linear.z),
+                },
+                "angular_velocity_radps": {
+                    "x": float(twist.angular.x),
+                    "y": float(twist.angular.y),
+                    "z": float(twist.angular.z),
+                },
+                "provenance": "delivered-odometry-not-proof-of-nav2-consumption",
+            }
+        )
+
     def on_harness(self, message: String) -> None:
         try:
             event = json.loads(message.data)
@@ -162,6 +224,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--bt-topic", default="/behavior_tree_log")
     parser.add_argument("--action", default="/navigate_to_pose")
     parser.add_argument("--harness-topic", default="/crane/explanation_event")
+    parser.add_argument("--command-topic", default="/nav2/cmd_vel")
+    parser.add_argument("--odom-topic", default="/crane/odom")
     return parser.parse_args(argv)
 
 
